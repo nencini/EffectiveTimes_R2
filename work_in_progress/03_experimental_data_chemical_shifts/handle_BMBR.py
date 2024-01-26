@@ -1,6 +1,295 @@
 import os
 
+
+
+
 def load_BMBR(BMBR_path:str):
+    # load in experimental data
+    experiments={}
+    for root, dirs, files in os.walk(BMBR_path):
+        if len(files)==1:
+            file=root+"/"+files[0]
+            with open(file,"r") as f:
+                read_relaxations=False
+                read_shifts=False
+                counter_relaxations=0 # saves data when -1
+                counter_shifts=0 # saves data when -1
+                for idline,line in enumerate(f):
+                    counter_relaxations+=1
+                    counter_shifts+=1
+                    if "_Entry.ID" in line:
+                        ID=line.split()[1]
+                        experiments[ID]={}
+                        experiments[ID]["disordered"]=False
+                        experiments[ID]["micelle"]=False
+                        experiments[ID]["T2measur"]={}
+                    if '_Heteronucl_T2_list.Sf_framecode' in line:
+                        mesurment=line.split()[1]
+                    if '_Heteronucl_T2_list.Sample_condition_list_label' in line:
+                        condition=line.split()[1]
+                        if condition not in experiments[ID]["T2measur"]:
+                            experiments[ID]["T2measur"][condition]={}
+                        experiments[ID]["T2measur"][condition][mesurment]={}
+                    if "_Heteronucl_T2_list.Spectrometer_frequency_1H" in line:
+                        field=line.split()[1]
+                        try:
+                            if float(field)>1100:
+                                field=float(field)/1000000
+                            experiments[ID]["T2measur"][condition][mesurment]['field']=float(field)
+                        except:
+                            print(ID,field)
+
+
+                        
+                        experiments[ID]["T2measur"][condition][mesurment]["results"]={}
+                        experiments[ID]["T2measur"][condition][mesurment]["results"]["AA"]=[]
+                        experiments[ID]["T2measur"][condition][mesurment]["results"]["atomID"]=[]
+                        experiments[ID]["T2measur"][condition][mesurment]["results"]["atomIDreal"]=[]
+                        experiments[ID]["T2measur"][condition][mesurment]["results"]["R2"]=[]
+                        experiments[ID]["T2measur"][condition][mesurment]["results"]["R2error"]=[]
+                    
+                    if "_Heteronucl_T2_list.T2_val_units" in line:
+                        units=line.split()[1]
+                        experiments[ID]["T2measur"][condition][mesurment]["units"]=units
+                    if "_T2.Heteronucl_T2_list_ID" in line:
+                        counter_relaxations=-3
+                    if counter_relaxations==-1:
+                        read_relaxations=True
+                    if read_relaxations:
+                        if len(line.split())==21:
+                            experiments[ID]["T2measur"][condition][mesurment]['expType']=line.split()[7]
+                            if experiments[ID]["T2measur"][condition][mesurment]["units"]=="s-1" or experiments[ID]["T2measur"][condition][mesurment]["units"]=="Hz":
+                                try:
+                                    experiments[ID]["T2measur"][condition][mesurment]["results"]["R2"].append(float(line.split()[10]))
+                                    experiments[ID]["T2measur"][condition][mesurment]["results"]["R2error"].append(float(line.split()[11]))
+                                    experiments[ID]["T2measur"][condition][mesurment]["results"]["AA"].append(line.split()[6])
+                                    experiments[ID]["T2measur"][condition][mesurment]["results"]["atomID"].append(int(line.split()[5]))
+                                    experiments[ID]["T2measur"][condition][mesurment]["results"]["atomIDreal"].append(int(line.split()[16]))
+                            
+                                except:
+                                    pass
+                            elif experiments[ID]["T2measur"][condition][mesurment]["units"]=="s":
+                                try:
+                                    experiments[ID]["T2measur"][condition][mesurment]["results"]["R2"].append(1/float(line.split()[10]))
+                                    experiments[ID]["T2measur"][condition][mesurment]["results"]["R2error"].append(1/float(line.split()[11]))
+                                    experiments[ID]["T2measur"][condition][mesurment]["results"]["AA"].append(line.split()[6])
+                                    experiments[ID]["T2measur"][condition][mesurment]["results"]["atomID"].append(int(line.split()[5]))
+                                    experiments[ID]["T2measur"][condition][mesurment]["results"]["atomIDreal"].append(int(line.split()[16]))
+                            
+                                except:
+                                    pass
+                            elif experiments[ID]["T2measur"][condition][mesurment]["units"]=="ms":
+                                try:
+                                    experiments[ID]["T2measur"][condition][mesurment]["results"]["R2"].append(1/float(line.split()[10])*1000)
+                                    experiments[ID]["T2measur"][condition][mesurment]["results"]["R2error"].append(1/float(line.split()[11])*1000)
+                                    experiments[ID]["T2measur"][condition][mesurment]["results"]["AA"].append(line.split()[6])
+                                    experiments[ID]["T2measur"][condition][mesurment]["results"]["atomID"].append(int(line.split()[5]))
+                                    experiments[ID]["T2measur"][condition][mesurment]["results"]["atomIDreal"].append(int(line.split()[16]))
+                            
+                                except:
+                                    pass
+                            elif experiments[ID]["T2measur"][condition][mesurment]["units"]=="ms-1":
+                                try:
+                                    experiments[ID]["T2measur"][condition][mesurment]["results"]["R2"].append(float(line.split()[10])/1000)
+                                    experiments[ID]["T2measur"][condition][mesurment]["results"]["R2error"].append(float(line.split()[11])/1000)
+                                    experiments[ID]["T2measur"][condition][mesurment]["results"]["AA"].append(line.split()[6])
+                                    experiments[ID]["T2measur"][condition][mesurment]["results"]["atomID"].append(int(line.split()[5]))
+                                    experiments[ID]["T2measur"][condition][mesurment]["results"]["atomIDreal"].append(int(line.split()[16]))
+                            
+                                except:
+                                    pass
+                        else:
+                            read_relaxations=False
+                    
+
+                    if ("disorder" in line or "Disorder" in line):
+                        experiments[ID]["disordered"]=True
+
+                    if ("micelle" in line or "Micelle" in line):
+                        experiments[ID]["micelle"]=True
+                    if "_Assembly.Molecular_mass" in line:
+
+                        if line.split()[1]!=".":
+                            experiments[ID]["weight"]=float(line.split()[1])
+                        else:
+                            experiments[ID]["weight"]=None
+    return experiments
+
+
+
+#used to be load_BMBR function , includes chemical chifts
+def load_BMBR_v2(BMBR_path:str):
+    # load in experimental data
+    experiments={}
+    for root, dirs, files in os.walk(BMBR_path):
+        if len(files)==1:
+            file=root+"/"+files[0]
+            with open(file,"r") as f:
+                read_relaxations=False
+                read_shifts=False
+                counter_relaxations=0 # saves data when -1
+                counter_shifts=0 # saves data when -1
+                for idline,line in enumerate(f):
+                    counter_relaxations+=1
+                    counter_shifts+=1
+                    if "_Entry.ID" in line:
+                        ID=line.split()[1]
+                        experiments[ID]={}
+                        experiments[ID]["disordered"]=False
+                        experiments[ID]["micelle"]=False
+                        experiments[ID]["shifts"]={}
+                        experiments[ID]["fields"]={}
+                        experiments[ID]["shifts"]["AA_shift"]=[]
+                        experiments[ID]["shifts"]["atomID_shift"]=[]
+                        shifts=["H","HA","C","CA","CB","N"]
+                        for shift in shifts:
+                            experiments[ID]["shifts"][shift]=[]
+                    if "_Heteronucl_T2_list.Spectrometer_frequency_1H" in line:
+                        field=line.split()[1]
+                        try:
+                            if float(field)>1100:
+                                field=float(field)/1000000
+                        except:
+                            print(ID,field)
+
+
+                        experiments[ID]["fields"][field]={}
+                        experiments[ID]["fields"][field]["results"]={}
+                        experiments[ID]["fields"][field]["results"]["AA"]=[]
+                        experiments[ID]["fields"][field]["results"]["atomID"]=[]
+                        experiments[ID]["fields"][field]["results"]["atomIDreal"]=[]
+                        experiments[ID]["fields"][field]["results"]["R2"]=[]
+                        experiments[ID]["fields"][field]["results"]["R2error"]=[]
+
+                    if "_Heteronucl_T2_list.T2_val_units" in line:
+                        units=line.split()[1]
+                        experiments[ID]["fields"][field]["units"]=units
+                    if "_T2.Heteronucl_T2_list_ID" in line:
+                        counter_relaxations=-3
+                    if counter_relaxations==-1:
+                        read_relaxations=True
+                    if read_relaxations:
+                        if len(line.split())==21:
+                            experiments[ID]["fields"][field]["results"]["AA"].append(line.split()[6])
+                            experiments[ID]["fields"][field]["results"]["atomID"].append(int(line.split()[5]))
+                            experiments[ID]["fields"][field]["results"]["atomIDreal"].append(int(line.split()[16]))
+                            if experiments[ID]["fields"][field]["units"]=="s-1" or experiments[ID]["fields"][field]["units"]=="Hz":
+                                try:
+                                    experiments[ID]["fields"][field]["results"]["R2"].append(float(line.split()[10]))
+                                    experiments[ID]["fields"][field]["results"]["R2error"].append(float(line.split()[11]))
+                                except:
+                                    experiments[ID]["fields"][field]["results"]["R2"].append(None)
+                                    experiments[ID]["fields"][field]["results"]["R2error"].append(None)
+                            elif experiments[ID]["fields"][field]["units"]=="s":
+                                try:
+                                    experiments[ID]["fields"][field]["results"]["R2"].append(1/float(line.split()[10]))
+                                    experiments[ID]["fields"][field]["results"]["R2error"].append(1/float(line.split()[11]))
+                                except:
+                                    experiments[ID]["fields"][field]["results"]["R2"].append(None)
+                                    experiments[ID]["fields"][field]["results"]["R2error"].append(None)
+                            elif experiments[ID]["fields"][field]["units"]=="ms":
+                                try:
+                                    experiments[ID]["fields"][field]["results"]["R2"].append(1/float(line.split()[10])*1000)
+                                    experiments[ID]["fields"][field]["results"]["R2error"].append(1/float(line.split()[11])*1000)
+                                except:
+                                    experiments[ID]["fields"][field]["results"]["R2"].append(None)
+                                    experiments[ID]["fields"][field]["results"]["R2error"].append(None)
+                            elif experiments[ID]["fields"][field]["units"]=="ms-1":
+                                try:
+                                    experiments[ID]["fields"][field]["results"]["R2"].append(float(line.split()[10])/1000)
+                                    experiments[ID]["fields"][field]["results"]["R2error"].append(float(line.split()[11])/1000)
+                                except:
+                                    experiments[ID]["fields"][field]["results"]["R2"].append(None)
+                                    experiments[ID]["fields"][field]["results"]["R2error"].append(None)
+
+                        else:
+                            read_relaxations=False
+                    if "_Atom_chem_shift.Assigned_chem_shift_list_ID" in line:
+                        counter_shifts=-3
+                    if counter_shifts==-1:
+                        read_shifts=True
+                    if read_shifts:
+                        if "stop_" in line or len(line.split())==0:
+                            read_shifts=False
+                            for shift in shifts:
+                                if len(experiments[ID]["shifts"][shift])<len(experiments[ID]["shifts"]["atomID_shift"]):
+                                    experiments[ID]["shifts"][shift].append(None)
+
+                        else:
+                            if len(experiments[ID]["shifts"]["atomID_shift"])>0:
+                                if int(line.split()[5])==experiments[ID]["shifts"]["atomID_shift"][-1]:
+                                    if line.split()[3]==".":
+                                        atom_position=8
+                                        shift_position=11
+                                    elif line.split()[3]=="1":
+                                        atom_position=7
+                                        shift_position=10
+                                    for shift in shifts:
+                                        if shift==line.split()[atom_position]:
+                                            experiments[ID]["shifts"][shift].append(float(line.split()[shift_position]))
+                                else:
+                                    
+                                    if line.split()[3]==".":
+                                        atom_position=8
+                                        shift_position=11
+                                        AA_name_position=7
+                                    elif line.split()[3]=="1":
+                                        atom_position=7
+                                        shift_position=10
+                                        AA_name_position=6
+                                    
+                                    experiments[ID]["shifts"]["atomID_shift"].append(int(line.split()[5]))
+                                    experiments[ID]["shifts"]["AA_shift"].append(line.split()[AA_name_position])
+                                    
+                                    
+                                    for shift in shifts:
+                                        if len(experiments[ID]["shifts"][shift])<len(experiments[ID]["shifts"]["atomID_shift"])-1:
+                                            experiments[ID]["shifts"][shift].append(None)
+
+                                        if shift==line.split()[atom_position]:
+                                            experiments[ID]["shifts"][shift].append(float(line.split()[shift_position]))
+
+
+
+                            else:
+                                if line.split()[3]==".":
+                                    atom_position=8
+                                    shift_position=11
+                                    AA_name_position=7
+                                elif line.split()[3]=="1":
+                                    atom_position=7
+                                    shift_position=10
+                                    AA_name_position=6
+                            
+                            
+                                experiments[ID]["shifts"]["atomID_shift"].append(int(line.split()[5]))
+                                experiments[ID]["shifts"]["AA_shift"].append(line.split()[AA_name_position])
+                                
+                                for index,shift in enumerate(shifts):
+                                    if shift==line.split()[atom_position]:
+                                        experiments[ID]["shifts"][shift].append(float(line.split()[shift_position]))
+                        
+
+
+                    if ("disorder" in line or "Disorder" in line):
+                        experiments[ID]["disordered"]=True
+
+                    if ("micelle" in line or "Micelle" in line):
+                        experiments[ID]["micelle"]=True
+                    if "_Assembly.Molecular_mass" in line:
+
+                        if line.split()[1]!=".":
+                            experiments[ID]["weight"]=float(line.split()[1])
+                        else:
+                            experiments[ID]["weight"]=None
+    return experiments
+    
+    
+
+
+
+#used to be load_BMBR function 
+def load_BMBR_old(BMBR_path:str):
     # load in experimental data
     experiments={}
     for root, dirs, files in os.walk(BMBR_path):
@@ -34,43 +323,43 @@ def load_BMBR(BMBR_path:str):
                             print(ID,field)
 
 
-                        experiments[ID][field]={}
-                        experiments[ID][field]["results"]={}
-                        experiments[ID][field]["results"]["AA"]=[]
-                        experiments[ID][field]["results"]["atomID"]=[]
-                        experiments[ID][field]["results"]["R2"]=[]
+                        experiments[ID]["fields"][field]={}
+                        experiments[ID]["fields"][field]["results"]={}
+                        experiments[ID]["fields"][field]["results"]["AA"]=[]
+                        experiments[ID]["fields"][field]["results"]["atomID"]=[]
+                        experiments[ID]["fields"][field]["results"]["R2"]=[]
 
                     if "_Heteronucl_T2_list.T2_val_units" in line:
                         units=line.split()[1]
-                        experiments[ID][field]["units"]=units
+                        experiments[ID]["fields"][field]["units"]=units
                     if "_T2.Heteronucl_T2_list_ID" in line:
                         counter_relaxations=-3
                     if counter_relaxations==-1:
                         read_relaxations=True
                     if read_relaxations:
                         if len(line.split())==21:
-                            experiments[ID][field]["results"]["AA"].append(line.split()[6])
-                            experiments[ID][field]["results"]["atomID"].append(int(line.split()[5]))
-                            if experiments[ID][field]["units"]=="s-1" or experiments[ID][field]["units"]=="Hz":
+                            experiments[ID]["fields"][field]["results"]["AA"].append(line.split()[6])
+                            experiments[ID]["fields"][field]["results"]["atomID"].append(int(line.split()[5]))
+                            if experiments[ID]["fields"][field]["units"]=="s-1" or experiments[ID]["fields"][field]["units"]=="Hz":
                                 try:
-                                    experiments[ID][field]["results"]["R2"].append(float(line.split()[10]))
+                                    experiments[ID]["fields"][field]["results"]["R2"].append(float(line.split()[10]))
                                 except:
-                                    experiments[ID][field]["results"]["R2"].append(None)
-                            elif experiments[ID][field]["units"]=="s":
+                                    experiments[ID]["fields"][field]["results"]["R2"].append(None)
+                            elif experiments[ID]["fields"][field]["units"]=="s":
                                 try:
-                                    experiments[ID][field]["results"]["R2"].append(1/float(line.split()[10]))
+                                    experiments[ID]["fields"][field]["results"]["R2"].append(1/float(line.split()[10]))
                                 except:
-                                    experiments[ID][field]["results"]["R2"].append(None)
-                            elif experiments[ID][field]["units"]=="ms":
+                                    experiments[ID]["fields"][field]["results"]["R2"].append(None)
+                            elif experiments[ID]["fields"][field]["units"]=="ms":
                                 try:
-                                    experiments[ID][field]["results"]["R2"].append(1/float(line.split()[10])*1000)
+                                    experiments[ID]["fields"][field]["results"]["R2"].append(1/float(line.split()[10])*1000)
                                 except:
-                                    experiments[ID][field]["results"]["R2"].append(None)
-                            elif experiments[ID][field]["units"]=="ms-1":
+                                    experiments[ID]["fields"][field]["results"]["R2"].append(None)
+                            elif experiments[ID]["fields"][field]["units"]=="ms-1":
                                 try:
-                                    experiments[ID][field]["results"]["R2"].append(float(line.split()[10])/1000)
+                                    experiments[ID]["fields"][field]["results"]["R2"].append(float(line.split()[10])/1000)
                                 except:
-                                    experiments[ID][field]["results"]["R2"].append(None)
+                                    experiments[ID]["fields"][field]["results"]["R2"].append(None)
 
                         else:
                             read_relaxations=False
