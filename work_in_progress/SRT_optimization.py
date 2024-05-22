@@ -295,7 +295,7 @@ def get_relaxation_N(magnetic_field,Coeffs,Ctimes,OP):
     return 1/R1, 1/R2, NOE
 
 
-def find_tau_from_R2_hyperbolic_approximation(magn_field_MHz,R2):
+def find_tau_from_R2_linear_approximation(magn_field_MHz,R2):
     magnetic_field=magn_field_MHz*2*np.pi/gammaH*10**6
 
     wn = gammaN * magnetic_field 
@@ -307,3 +307,8 @@ def find_tau_from_R2_hyperbolic_approximation(magn_field_MHz,R2):
     eff_time=R2/(4*K1+4*K2)
     
     return eff_time
+    
+if __name__ == "__main__":
+    magn_field_MHz=float(input("Magnetic field in MHz "))
+    R2=float(input("R2 value in 1/s "))
+    print(f'Effective time is {find_tau_from_R2_np_poly1d(magn_field_MHz,R2)*10**9:.3f} s')
